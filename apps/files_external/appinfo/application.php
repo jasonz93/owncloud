@@ -76,6 +76,7 @@ class Application extends App {
 			$container->query('OCA\Files_External\Lib\Backend\OwnCloud'),
 			$container->query('OCA\Files_External\Lib\Backend\SFTP'),
 			$container->query('OCA\Files_External\Lib\Backend\AmazonS3'),
+			$container->query('OCA\Files_External\Lib\Backend\AliyunOSS'),
 			$container->query('OCA\Files_External\Lib\Backend\Dropbox'),
 			$container->query('OCA\Files_External\Lib\Backend\Google'),
 			$container->query('OCA\Files_External\Lib\Backend\Swift'),
