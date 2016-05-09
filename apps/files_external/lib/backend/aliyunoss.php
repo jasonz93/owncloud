@@ -19,14 +19,13 @@ class AliyunOSS extends Backend {
 
 	public function __construct(IL10N $l, AccessKey $legacyAuth) {
 		$this
-			->setIdentifier('amazons3')
+			->setIdentifier('aliyunoss')
 			->addIdentifierAlias('\OC\Files\Storage\AliyunOSS') // legacy compat
 			->setStorageClass('\OC\Files\Storage\AliyunOSS')
 			->setText($l->t('Aliyun OSS'))
 			->addParameters([
 				(new DefinitionParameter('bucket', $l->t('Bucket'))),
 				(new DefinitionParameter('endpoint', $l->t('Endpoint')))
-					->setFlag(DefinitionParameter::FLAG_OPTIONAL),
 			])
 			->addAuthScheme(AccessKey::SCHEME_AMAZONS3_ACCESSKEY)
 			->setLegacyAuthMechanism($legacyAuth)

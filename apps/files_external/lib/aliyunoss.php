@@ -9,12 +9,11 @@
 namespace OC\Files\Storage;
 
 use Icewind\Streams\IteratorDirectory;
-use OSS\Model\ObjectInfo;
 use OSS\OssClient;
 
 set_include_path(get_include_path() . PATH_SEPARATOR .
 	\OC_App::getAppPath('files_external') . '/3rdparty/aliyun-oss-php-sdk');
-require 'autoload.php';
+require 'aliyunoss-autoload.php';
 
 class AliyunOSS extends Common{
 
@@ -80,6 +79,7 @@ class AliyunOSS extends Common{
 	}
 
 	private function batchDelete($path = null) {
+		error_log($path);
 		$params = [
 			OssClient::OSS_MAX_KEYS => 1000
 		];
@@ -91,8 +91,12 @@ class AliyunOSS extends Common{
 				$objs = $this->getClient()->listObjects($this->bucket, $params);
 				$keys = [];
 				foreach ($objs->getObjectList() as $obj) {
+					if ($obj->getKey() === $path) {
+						continue;
+					}
 					$keys[] = $obj->getKey();
 				}
+				error_log(var_export($keys, true));
 				$this->getClient()->deleteObjects($this->bucket, $keys);
 			} while (!$objs->getIsTruncated());
 		} catch (\Exception $e) {
@@ -131,7 +135,7 @@ class AliyunOSS extends Common{
 		}
 
 		try {
-			$this->getClient()->putObject($this->bucket, $path.'/', '', [
+			$this->getClient()->putObject($this->bucket, $path.'/', ' ', [
 				OssClient::OSS_CONTENT_TYPE => 'httpd/unix-directory'
 			]);
 		} catch (\Exception $e) {
@@ -186,13 +190,14 @@ class AliyunOSS extends Common{
 			$objects = $result->getObjectList();
 			$prefixs = $result->getPrefixList();
 			foreach ($objects as $index => $object) {
-				if ($object->getKey() !== '' && $object->getKey() === $path) {
+				$file = basename($object->getKey());
+				$files[] = $file;
+			}
+			foreach ($prefixs as $prefix) {
+				if ($path === $prefix->getPrefix()) {
 					continue;
 				}
-				$file = basename(
-					$object->getKey() === '' ? $prefixs[$index]->getPrefix() : $object->getKey()
-				);
-				$files[] = $file;
+				$files[] = basename($prefix->getPrefix());
 			}
 
 			return IteratorDirectory::wrap($files);
@@ -217,17 +222,13 @@ class AliyunOSS extends Common{
 			$stat = array();
 			if ($this->is_dir($path)) {
 				//folders don't really exist
-				$stat['size'] = -1; //unknown
+				$stat['size'] = 0; //unknown
 				$stat['mtime'] = time();
 			} else {
 				$result = $this->getClient()->getObjectMeta($this->bucket, $path);
 
-				$stat['size'] = $result['ContentLength'] ? $result['ContentLength'] : 0;
-				if ($result['Metadata']['lastmodified']) {
-					$stat['mtime'] = strtotime($result['Metadata']['lastmodified']);
-				} else {
-					$stat['mtime'] = strtotime($result['LastModified']);
-				}
+				$stat['size'] = $result['content-length'] ? $result['content-length'] : 0;
+				$stat['mtime'] = strtotime($result['last-modified']);
 			}
 			$stat['atime'] = time();
 
@@ -358,6 +359,25 @@ class AliyunOSS extends Common{
 		return false;
 	}
 
+	public function writeBack($tmpFile) {
+		if (!isset(self::$tmpFiles[$tmpFile])) {
+			return false;
+		}
+
+		try {
+			$content = file_get_contents($tmpFile);
+			$this->getClient()->putObject($this->bucket, $this->cleanKey(self::$tmpFiles[$tmpFile]), $content, [
+				OssClient::OSS_CONTENT_TYPE => \OC::$server->getMimeTypeDetector()->detect($tmpFile),
+				OssClient::OSS_CONTENT_LENGTH => filesize($tmpFile)
+			]);
+
+			unlink($tmpFile);
+		} catch (\Exception $e) {
+			\OCP\Util::logException('files_external', $e);
+			return false;
+		}
+	}
+
 	/**
 	 * see http://php.net/manual/en/function.touch.php
 	 * If the backend does not support the operation, false should be returned
@@ -388,6 +408,10 @@ class AliyunOSS extends Common{
 			return false;
 		}
 
+		return true;
+	}
+
+	public static function checkDependencies() {
 		return true;
 	}
 }
